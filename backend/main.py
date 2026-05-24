@@ -39,13 +39,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from db import get_supabase, get_supabase_admin
-from data_adapter import adapt_data, read_file
-from nlp_engine import batch_analyze, aggregate_sentiment_by_item
-from content_model import ContentRecommender
-from collaborative_model import CollaborativeRecommender
-from hybrid_model import HybridRecommender
-from ab_testing import DEFAULT_EXPERIMENT_ID, run_recommendation_experiment
+from src.data.db import get_supabase, get_supabase_admin
+from src.data.data_adapter import adapt_data, read_file
+from src.model.nlp_engine import batch_analyze, aggregate_sentiment_by_item
+from src.model.content_model import ContentRecommender
+from src.model.collaborative_model import CollaborativeRecommender
+from src.model.hybrid_model import HybridRecommender
+from src.evaluation.ab_testing import DEFAULT_EXPERIMENT_ID, run_recommendation_experiment
 
 from functools import lru_cache
 from datetime import datetime, timedelta
