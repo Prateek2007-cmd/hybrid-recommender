@@ -231,13 +231,43 @@ def _get_cached_response(key: str):
         expires_at, value = cached
         return value
 
-<<<<<<< Updated upstream
 # ── FIX #1292: HIGH PERFORMANCE RATE LIMITER PATH ─────────────────────
 def _apply_rate_limit(ip_address: str) -> bool:
     """
     Applies token-bucket rate limiting dynamically.
     Optimized to handle Algorithmic Complexity DoS scenarios.
-=======
+    """
+    import time
+    import random
+    current_time = time.time()
+    
+    with _rate_limit_lock:
+        bucket = _rate_limit_buckets.get(ip_address)
+        if bucket is None:
+            bucket = {"tokens": 10.0, "last_updated": current_time}
+        else:
+            elapsed = current_time - bucket["last_updated"]
+            bucket["tokens"] = min(10.0, bucket["tokens"] + elapsed * 1.0)
+            bucket["last_updated"] = current_time
+            
+        if bucket["tokens"] >= 1.0:
+            bucket["tokens"] -= 1.0
+            _rate_limit_buckets[ip_address] = bucket
+            allowed = True
+        else:
+            allowed = False
+            
+        # Optimization: Move cleanup out of the request loop path
+        global _request_counter
+        _request_counter += 1
+        if random.random() < 0.001 or _request_counter >= CLEANUP_THRESHOLD:
+            _request_counter = 0
+            # Evict empty keys inside amortized window block
+            empty_keys = [k for k, v in _rate_limit_buckets.items() if not v or v.get("tokens", 0.0) <= 0.1]
+            for k in empty_keys:
+                del _rate_limit_buckets[k]
+                
+    return allowed
 def _set_cached_response(key: str, value: Any) -> None:
     try:
         with _cache_lock:
@@ -630,9 +660,8 @@ class FederatedTrainRequest(BaseModel):
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
->>>>>>> Stashed changes
     """
-    Low‑overhead health check endpoint for component tracking.
+    Low-overhead health check endpoint for component tracking.
     Checks database (Supabase), model readiness, and cache (Redis).
     """
     from src.data.db import get_supabase
@@ -971,34 +1000,7 @@ def search_items(
             except Exception:
                 sentiment_value = "N/A"
     
-    with _rate_limit_lock:
-        bucket = _rate_limit_buckets.get(ip_address)
-        if bucket is None:
-            bucket = {"tokens": 10.0, "last_updated": current_time}
-        else:
-            elapsed = current_time - bucket["last_updated"]
-            bucket["tokens"] = min(10.0, bucket["tokens"] + elapsed * 1.0)
-            bucket["last_updated"] = current_time
-            
-        if bucket["tokens"] >= 1.0:
-            bucket["tokens"] -= 1.0
-            _rate_limit_buckets[ip_address] = bucket
-            allowed = True
-        else:
-            allowed = False
-            
-        # Optimization: Move cleanup out of the request loop path
-        _request_counter += 1
-        if random.random() < 0.001 or _request_counter >= CLEANUP_THRESHOLD:
-            _request_counter = 0
-            # Evict empty keys inside amortized window block
-            empty_keys = [k for k, v in _rate_limit_buckets.items() if not v or v.get("tokens", 0.0) <= 0.1]
-            for k in empty_keys:
-                del _rate_limit_buckets[k]
-                
-    return allowed
-
-
+    
 # ── FIX #1315: EXPLAINABLE AI RECOVERY ENDPOINT ROUTE ─────────────────
 @app.get("/api/recommendations/{item_id}/explanation")
 async def get_recommendation_explanation(item_id: str, user_id: str):
