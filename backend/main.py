@@ -248,12 +248,14 @@ def _apply_rate_limit(ip_address: str) -> bool:
             _rate_limit_buckets[ip_address] = bucket
         else:
             _rate_limit_buckets.move_to_end(ip_address)
+        else:
             elapsed = current_time - bucket["last_updated"]
             bucket["tokens"] = min(10.0, bucket["tokens"] + elapsed * 1.0)
             bucket["last_updated"] = current_time
             
         if bucket["tokens"] >= 1.0:
             bucket["tokens"] -= 1.0
+            _rate_limit_buckets[ip_address] = bucket
             allowed = True
         else:
             allowed = False
@@ -261,6 +263,15 @@ def _apply_rate_limit(ip_address: str) -> bool:
         # Optimization: O(1) Eviction to prevent memory leak and Algorithmic Complexity DoS
         if len(_rate_limit_buckets) > MAX_RATE_LIMIT_IPS:
             _rate_limit_buckets.popitem(last=False)
+        # Optimization: Move cleanup out of the request loop path
+        global _request_counter
+        _request_counter += 1
+        if random.random() < 0.001 or _request_counter >= CLEANUP_THRESHOLD:
+            _request_counter = 0
+            # Evict empty keys inside amortized window block
+            empty_keys = [k for k, v in _rate_limit_buckets.items() if not v or v.get("tokens", 0.0) <= 0.1]
+            for k in empty_keys:
+                del _rate_limit_buckets[k]
                 
     return allowed
 def _set_cached_response(key: str, value: Any) -> None:
